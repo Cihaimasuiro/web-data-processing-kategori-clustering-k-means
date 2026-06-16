@@ -51,7 +51,7 @@ function initCentroidsPlusPlus(data, k) {
 }
 
 function runKMeans(data, k, maxIter=50, restarts=4) {
-  if (!data.length) return { assignments:[], centroids:[], wcss:0 };
+  if (!data.length || k <= 0) return { assignments:[], centroids:[], wcss:0 };
   const effK = Math.max(1, Math.min(k, data.length));
   let best = null;
   for (let r=0; r<restarts; r++) {
@@ -64,19 +64,76 @@ function runKMeans(data, k, maxIter=50, restarts=4) {
         for (let c=0; c<effK; c++) { const d=euclideanDist(data[i],centroids[c]); if (d<bestDist){bestDist=d;bestC=c;} }
         if (assignments[i]!==bestC) { assignments[i]=bestC; changed=true; }
       }
+      if (!changed && iter > 0) {
+        // Recalculate centroids one last time before breaking
+        const dim=data[0].length;
+        const sums=Array.from({length:effK},()=>new Array(dim).fill(0));
+        const counts=new Array(effK).fill(0);
+        for (let i=0; i<data.length; i++) { counts[assignments[i]]++; for (let j=0; j<dim; j++) sums[assignments[i]][j]+=data[i][j]; }
+        for (let c=0; c<effK; c++) { if (counts[c]>0) centroids[c]=sums[c].map(s=>s/counts[c]); }
+        break;
+      }
       const dim=data[0].length;
       const sums=Array.from({length:effK},()=>new Array(dim).fill(0));
       const counts=new Array(effK).fill(0);
       for (let i=0; i<data.length; i++) { counts[assignments[i]]++; for (let j=0; j<dim; j++) sums[assignments[i]][j]+=data[i][j]; }
       for (let c=0; c<effK; c++) { if (counts[c]>0) centroids[c]=sums[c].map(s=>s/counts[c]); }
-      if (!changed && iter>0) break;
     }
     let wcss=0;
-    for (let i=0; i<data.length; i++) wcss+=euclideanDist(data[i],centroids[assignments[i]])**2;
+    for (let i=0; i<data.length; i++) {
+      if (centroids[assignments[i]]) {
+        wcss+=euclideanDist(data[i],centroids[assignments[i]])**2;
+      }
+    }
     if (!best||wcss<best.wcss) best={assignments,centroids,wcss};
   }
   return best;
 }
+
+function calculateSilhouetteScore(data, assignments, k) {
+  if (k <= 1 || data.length < k) return 0;
+  let totalScore = 0;
+  const pointScores = new Array(data.length).fill(0);
+
+  for (let i = 0; i < data.length; i++) {
+    const myCluster = assignments[i];
+    let a = 0, aCount = 0;
+    const b = new Array(k).fill(0);
+    const bCounts = new Array(k).fill(0);
+
+    for (let j = 0; j < data.length; j++) {
+      if (i === j) continue;
+      const dist = euclideanDist(data[i], data[j]);
+      const otherCluster = assignments[j];
+      if (myCluster === otherCluster) {
+        a += dist;
+        aCount++;
+      } else {
+        b[otherCluster] += dist;
+        bCounts[otherCluster]++;
+      }
+    }
+
+    const avgA = aCount > 0 ? a / aCount : 0;
+    
+    let minAvgB = Infinity;
+    for (let c = 0; c < k; c++) {
+      if (c === myCluster) continue;
+      const avgB = bCounts[c] > 0 ? b[c] / bCounts[c] : 0;
+      if (bCounts[c] > 0 && avgB < minAvgB) {
+        minAvgB = avgB;
+      }
+    }
+    if (minAvgB === Infinity) minAvgB = 0;
+
+    const denominator = Math.max(avgA, minAvgB);
+    pointScores[i] = denominator === 0 ? 0 : (minAvgB - avgA) / denominator;
+  }
+
+  totalScore = pointScores.reduce((sum, score) => sum + score, 0);
+  return data.length > 0 ? totalScore / data.length : 0;
+}
+
 
 function getSegmentLabels(k) {
   const base = ['Pelanggan Utama (Champions)','Pelanggan Setia','Pelanggan Reguler','Pelanggan Potensial','Pelanggan Baru'];
@@ -230,12 +287,15 @@ export default function App() {
   const [parseError, setParseError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [kValue, setKValue] = useState(3);
-  const [elbowData, setElbowData] = useState(null);
-  const [elbowLoading, setElbowLoading] = useState(false);
+  const [evaluationData, setEvaluationData] = useState(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
   const [clusterResult, setClusterResult] = useState(null);
   const [clusterLoading, setClusterLoading] = useState(false);
   const [axisX, setAxisX] = useState('recency');
   const [axisY, setAxisY] = useState('monetary');
+  const [showRfmTable, setShowRfmTable] = useState(false);
+  const [rfmCurrentPage, setRfmCurrentPage] = useState(1);
+  const RFM_PAGE_SIZE = 10;
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -253,7 +313,7 @@ export default function App() {
     });
   };
 
-  const resetAll = () => { setStage('upload'); setFileName(''); setHeaders([]); setRawData([]); setMapping({}); setElbowData(null); setClusterResult(null); setActiveTab('overview'); };
+  const resetAll = () => { setStage('upload'); setFileName(''); setHeaders([]); setRawData([]); setMapping({}); setEvaluationData(null); setClusterResult(null); setActiveTab('overview'); };
 
   const transactions = useMemo(() => {
     if (stage!=='app') return [];
@@ -316,15 +376,21 @@ export default function App() {
     };
   }, [transactions]);
 
-  const runElbow = useCallback(() => {
+  const runEvaluation = useCallback(() => {
     if (!normalizedFeatures.length) return;
-    setElbowLoading(true);
-    setTimeout(()=>{
-      const maxK=Math.min(8,normalizedFeatures.length);
-      const results=[];
-      for (let k=1;k<=maxK;k++) { const r=runKMeans(normalizedFeatures,k,50,3); results.push({k,wcss:Math.round(r.wcss*100)/100}); }
-      setElbowData(results); setElbowLoading(false);
-    },30);
+    setEvaluationLoading(true);
+    setTimeout(() => {
+      const maxK = Math.min(8, normalizedFeatures.length - 1);
+      const results = [];
+      for (let k = 2; k <= maxK; k++) {
+        const kmeansResult = runKMeans(normalizedFeatures, k, 50, 3);
+        const wcss = Math.round(kmeansResult.wcss * 100) / 100;
+        const silhouette = calculateSilhouetteScore(normalizedFeatures, kmeansResult.assignments, k);
+        results.push({ k, wcss, silhouette: Math.round(silhouette * 1000) / 1000 });
+      }
+      setEvaluationData(results);
+      setEvaluationLoading(false);
+    }, 30);
   }, [normalizedFeatures]);
 
   const runClustering = useCallback(() => {
@@ -541,36 +607,87 @@ export default function App() {
               <SectionTitle eyebrow="K-Means Clustering" title="Segmentasi Pelanggan (RFM)" desc={`${customers.length.toLocaleString('id-ID')} pelanggan diukur berdasarkan Recency, Frequency, dan Monetary, dinormalisasi (min-max), lalu dikelompokkan dengan K-Means.`} />
 
               <Ticket style={{ padding:22, marginBottom:24 }}>
+                <button onClick={() => setShowRfmTable(s => !s)} style={{ width: '100%', background: 'none', border: 'none', color: C.text, padding: 0, textAlign: 'left', cursor: 'pointer' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600 }}>Analisis RFM</div>
+                    <div style={{ transform: showRfmTable ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</div>
+                  </div>
+                  <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>Tabel rincian nilai Recency, Frequency, dan Monetary untuk setiap pelanggan.</div>
+                </button>
+                {showRfmTable && (
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                      <thead><tr>{['ID Pelanggan','Recency (hari)','Frequency (kali)','Monetary (Rp)'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {customers.slice((rfmCurrentPage - 1) * RFM_PAGE_SIZE, rfmCurrentPage * RFM_PAGE_SIZE).map(c=>(
+                          <tr key={c.customerId}>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{c.customerId}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(c.recency)}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(c.frequency)}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtIDR(c.monetary)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: 8, fontSize: 12, color: C.muted }}>
+                      <button onClick={() => setRfmCurrentPage(p => Math.max(1, p - 1))} disabled={rfmCurrentPage === 1} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>‹ Prev</button>
+                      <span>Halaman {rfmCurrentPage} dari {Math.ceil(customers.length / RFM_PAGE_SIZE)}</span>
+                      <button onClick={() => setRfmCurrentPage(p => Math.min(Math.ceil(customers.length / RFM_PAGE_SIZE), p + 1))} disabled={rfmCurrentPage === Math.ceil(customers.length / RFM_PAGE_SIZE)} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>Next ›</button>
+                    </div>
+                  </div>
+                )}
+              </Ticket>
+
+              <Ticket style={{ padding:22, marginBottom:24 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12, marginBottom:16 }}>
                   <div>
-                    <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.amber, marginBottom:4 }}>LANGKAH 1</div>
-                    <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600 }}>Elbow Method</div>
-                    <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>Titik "siku" pada grafik menunjukkan jumlah cluster optimal.</div>
+                    <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.amber, marginBottom:4 }}>LANGKAH 1: EVALUASI MODEL</div>
+                    <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600 }}>Menentukan Jumlah Cluster (k) Optimal</div>
+                    <div style={{ fontSize:13, color:C.muted, marginTop:4, maxWidth: 600 }}>Gunakan metode Elbow dan Silhouette Score untuk menemukan nilai 'k' terbaik untuk data Anda.</div>
                   </div>
-                  <button onClick={runElbow} disabled={elbowLoading} style={{ background:C.amber, color:'#1A1306', border:'none', borderRadius:6, padding:'11px 22px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, fontWeight:600, cursor:'pointer', opacity:elbowLoading?0.5:1 }}>{elbowLoading?'Menghitung…':'Hitung Elbow Method'}</button>
+                  <button onClick={runEvaluation} disabled={evaluationLoading} style={{ background:C.amber, color:'#1A1306', border:'none', borderRadius:6, padding:'11px 22px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, fontWeight:600, cursor:'pointer', opacity:evaluationLoading?0.5:1 }}>{evaluationLoading?'Menghitung…':'Jalankan Evaluasi (k=2-8)'}</button>
                 </div>
-                {elbowData && (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <LineChart data={elbowData}>
-                      <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
-                      <XAxis dataKey="k" stroke={C.muted} fontSize={11} label={{value:'k (jumlah cluster)',position:'insideBottom',offset:-2,fill:C.muted,fontSize:11}} />
-                      <YAxis stroke={C.muted} fontSize={11} label={{value:'WCSS',angle:-90,position:'insideLeft',fill:C.muted,fontSize:11}} />
-                      <Tooltip contentStyle={tooltipStyle} />
-                      <Line type="monotone" dataKey="wcss" stroke={C.amber} strokeWidth={2.5} dot={{r:4,fill:C.amber}} name="WCSS" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                {evaluationData && (
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: 24, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+                    <div>
+                      <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.muted, marginBottom:4 }}>Elbow Method (WCSS)</div>
+                      <p style={{ fontSize:12, color:C.muted, marginTop:0, marginBottom:12, lineHeight:1.6 }}>Pilih 'k' di titik "siku" (penurunan WCSS mulai melandai). Nilai WCSS yang lebih rendah lebih baik.</p>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <LineChart data={evaluationData}>
+                          <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+                          <XAxis dataKey="k" type="number" domain={['dataMin', 'dataMax']} stroke={C.muted} fontSize={11} label={{value:'k (jumlah cluster)',position:'insideBottom',offset:-2,fill:C.muted,fontSize:11}} />
+                          <YAxis stroke={C.muted} fontSize={11} label={{value:'WCSS',angle:-90,position:'insideLeft',fill:C.muted,fontSize:11}} />
+                          <Tooltip contentStyle={tooltipStyle} />
+                          <Line type="monotone" dataKey="wcss" stroke={C.amber} strokeWidth={2.5} dot={{r:4,fill:C.amber}} name="WCSS" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.muted, marginBottom:4 }}>Silhouette Score</div>
+                      <p style={{ fontSize:12, color:C.muted, marginTop:0, marginBottom:12, lineHeight:1.6 }}>Pilih 'k' dengan skor tertinggi. Skor mendekati +1 menunjukkan cluster padat dan terpisah dengan baik.</p>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <LineChart data={evaluationData}>
+                          <CartesianGrid stroke={C.border} strokeDasharray="3 3" />
+                          <XAxis dataKey="k" type="number" domain={['dataMin', 'dataMax']} stroke={C.muted} fontSize={11} label={{value:'k (jumlah cluster)',position:'insideBottom',offset:-2,fill:C.muted,fontSize:11}} />
+                          <YAxis stroke={C.muted} fontSize={11} domain={[0, 1]} label={{value:'Score',angle:-90,position:'insideLeft',fill:C.muted,fontSize:11}} />
+                          <Tooltip contentStyle={tooltipStyle} />
+                          <Line type="monotone" dataKey="silhouette" stroke={C.teal} strokeWidth={2.5} dot={{r:4,fill:C.teal}} name="Silhouette" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 )}
               </Ticket>
 
               <Ticket style={{ padding:22, marginBottom:24 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:16 }}>
                   <div>
-                    <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.amber, marginBottom:4 }}>LANGKAH 2</div>
+                    <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.amber, marginBottom:4 }}>LANGKAH 2: SEGMENTASI</div>
                     <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600 }}>Jalankan K-Means</div>
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:14 }}>
                     <label style={{ fontSize:13, color:C.muted, display:'flex', alignItems:'center', gap:8 }}>
-                      Nilai k:
+                      Nilai k Pilihan:
                       <input type="number" min={2} max={Math.min(8,customers.length)} value={kValue} onChange={e=>setKValue(Math.max(2,Math.min(8,Number(e.target.value)||2)))} style={{ width:64, background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:5, padding:'8px 10px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13 }} />
                     </label>
                     <button onClick={runClustering} disabled={clusterLoading} style={{ background:C.amber, color:'#1A1306', border:'none', borderRadius:6, padding:'11px 22px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, fontWeight:600, cursor:'pointer', opacity:clusterLoading?0.5:1 }}>{clusterLoading?'Memproses…':'Jalankan K-Means'}</button>
@@ -636,16 +753,19 @@ export default function App() {
                       <button onClick={downloadResults} style={{ background:'transparent', color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'10px 20px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, cursor:'pointer' }}>⬇ Unduh Data Per Pelanggan (CSV)</button>
                     </div>
                     <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                      <thead><tr>{['Cluster','Segmen','Jumlah Pelanggan','Avg Recency (hari)','Avg Frequency','Avg Monetary'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{['Cluster','Segmen','Pelanggan','Avg Recency','R-Level','Avg Frequency','F-Level','Avg Monetary','M-Level'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {clusterSummary.map(s=>(
+                        {clusterInterpretations.map(s=>(
                           <tr key={s.cluster}>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:CLUSTER_COLORS[s.cluster%CLUSTER_COLORS.length], marginRight:8 }} />{s.cluster}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'Inter,sans-serif', fontWeight:500 }}>{s.label}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(s.count)}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(s.avgR,1)}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ background: s.levelR==='Tinggi'?C.green:s.levelR==='Rendah'?C.rose:C.surfaceAlt, color: s.levelR==='Tinggi'?'#0A1A0A':s.levelR==='Rendah'?'#2A0A0A':C.text, padding:'3px 6px', borderRadius:4, fontSize:11 }}>{s.levelR}</span></td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(s.avgF,1)}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ background: s.levelF==='Tinggi'?C.green:s.levelF==='Rendah'?C.rose:C.surfaceAlt, color: s.levelF==='Tinggi'?'#0A1A0A':s.levelF==='Rendah'?'#2A0A0A':C.text, padding:'3px 6px', borderRadius:4, fontSize:11 }}>{s.levelF}</span></td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtIDR(s.avgM)}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ background: s.levelM==='Tinggi'?C.green:s.levelM==='Rendah'?C.rose:C.surfaceAlt, color: s.levelM==='Tinggi'?'#0A1A0A':s.levelM==='Rendah'?'#2A0A0A':C.text, padding:'3px 6px', borderRadius:4, fontSize:11 }}>{s.levelM}</span></td>
                           </tr>
                         ))}
                       </tbody>
