@@ -564,7 +564,7 @@ export default function App() {
         {activeTab==='ringkasan' && (
           overview ? (
             <div>
-              <SectionTitle eyebrow="Dashboard" title="Ringkasan Penjualan" desc="Gambaran umum performa penjualan berdasarkan data transaksi yang diunggah." />
+              <SectionTitle eyebrow="Dasbor" title="Ringkasan Penjualan" desc="Gambaran umum performa penjualan berdasarkan data transaksi yang diunggah." />
               <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:18, marginBottom:32 }}>
                 <Kpi label="Total Pendapatan" value={fmtIDR(overview.totalRevenue)} accent={C.amber} />
                 <Kpi label="Total Transaksi" value={fmtNum(overview.totalOrders)} />
@@ -630,9 +630,9 @@ export default function App() {
                       </tbody>
                     </table>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: 8, fontSize: 12, color: C.muted }}>
-                      <button onClick={() => setRfmCurrentPage(p => Math.max(1, p - 1))} disabled={rfmCurrentPage === 1} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>‹ Prev</button>
+                      <button onClick={() => setRfmCurrentPage(p => Math.max(1, p - 1))} disabled={rfmCurrentPage === 1} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>‹ Sebelumnya</button>
                       <span>Halaman {rfmCurrentPage} dari {Math.ceil(customers.length / RFM_PAGE_SIZE)}</span>
-                      <button onClick={() => setRfmCurrentPage(p => Math.min(Math.ceil(customers.length / RFM_PAGE_SIZE), p + 1))} disabled={rfmCurrentPage === Math.ceil(customers.length / RFM_PAGE_SIZE)} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>Next ›</button>
+                      <button onClick={() => setRfmCurrentPage(p => Math.min(Math.ceil(customers.length / RFM_PAGE_SIZE), p + 1))} disabled={rfmCurrentPage === Math.ceil(customers.length / RFM_PAGE_SIZE)} style={{ background:C.surfaceAlt, color:C.text, border:`1px solid ${C.border}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>Berikutnya ›</button>
                     </div>
                   </div>
                 )}
@@ -663,7 +663,7 @@ export default function App() {
                       </ResponsiveContainer>
                     </div>
                     <div>
-                      <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.muted, marginBottom:4 }}>Silhouette Score</div>
+                      <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:12, color:C.muted, marginBottom:4 }}>Skor Silhouette</div>
                       <p style={{ fontSize:12, color:C.muted, marginTop:0, marginBottom:12, lineHeight:1.6 }}>Pilih 'k' dengan skor tertinggi. Skor mendekati +1 menunjukkan cluster padat dan terpisah dengan baik.</p>
                       <ResponsiveContainer width="100%" height={240}>
                         <LineChart data={evaluationData}>
