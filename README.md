@@ -10,7 +10,11 @@ Dibuat sebagai pendukung paper: **"Penerapan Algoritma K-Means pada Sistem Anali
 - Segmentasi pelanggan RFM dengan K-Means (implementasi murni JavaScript)
 - Elbow Method untuk menentukan nilai k optimal
 - Visualisasi scatter plot, pie chart, dan tabel karakteristik cluster
-- Download hasil segmentasi ke CSV
+- **Ringkasan eksekutif otomatis** (segmen kontributor revenue terbesar & segmen berisiko churn)
+- **Interpretasi detail per segmen**: deskripsi karakteristik RFM (level Tinggi/Sedang/Rendah relatif terhadap rata-rata keseluruhan) beserta persentase populasi dan kontribusi revenue
+- **Rekomendasi strategi bisnis/marketing** otomatis per segmen (loyalitas, win-back, cross-sell, onboarding, dll) berdasarkan kombinasi level Recency/Frequency/Monetary
+- Download hasil segmentasi per pelanggan ke CSV
+- Download ringkasan interpretasi & rekomendasi per segmen ke CSV (untuk lampiran laporan/skripsi)
 
 ## Tech Stack
 - React 18 + Vite

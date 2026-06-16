@@ -87,6 +87,83 @@ function getSegmentLabels(k) {
   return [...base,...extra,'Pelanggan Berisiko (At Risk)'];
 }
 
+// Klasifikasi level (Tinggi/Sedang/Rendah) relatif terhadap rata-rata keseluruhan pelanggan.
+// inverse=true dipakai untuk Recency, karena nilai hari yang LEBIH KECIL berarti LEBIH aktif (lebih baik).
+function classifyLevel(value, overallAvg, inverse = false) {
+  if (!overallAvg) return 'Sedang';
+  const ratio = value / overallAvg;
+  if (inverse) {
+    if (ratio <= 0.7) return 'Tinggi';
+    if (ratio >= 1.3) return 'Rendah';
+    return 'Sedang';
+  }
+  if (ratio >= 1.2) return 'Tinggi';
+  if (ratio <= 0.8) return 'Rendah';
+  return 'Sedang';
+}
+
+function buildNarrative(s, levelR, levelF, levelM, pctCustomers, pctRevenue) {
+  const recencyDesc = levelR === 'Tinggi'
+    ? `masih aktif bertransaksi baru-baru ini (rata-rata ${fmtNum(s.avgR, 1)} hari sejak transaksi terakhir)`
+    : levelR === 'Rendah'
+    ? `sudah cukup lama tidak bertransaksi (rata-rata ${fmtNum(s.avgR, 1)} hari sejak transaksi terakhir)`
+    : `tergolong cukup aktif (rata-rata ${fmtNum(s.avgR, 1)} hari sejak transaksi terakhir)`;
+  const freqDesc = levelF === 'Tinggi'
+    ? `frekuensi transaksi yang tinggi (rata-rata ${fmtNum(s.avgF, 1)} kali)`
+    : levelF === 'Rendah'
+    ? `frekuensi transaksi yang rendah (rata-rata ${fmtNum(s.avgF, 1)} kali)`
+    : `frekuensi transaksi yang sedang (rata-rata ${fmtNum(s.avgF, 1)} kali)`;
+  const monDesc = levelM === 'Tinggi'
+    ? `nilai belanja yang tinggi (rata-rata ${fmtIDR(s.avgM)} per pelanggan)`
+    : levelM === 'Rendah'
+    ? `nilai belanja yang rendah (rata-rata ${fmtIDR(s.avgM)} per pelanggan)`
+    : `nilai belanja yang sedang (rata-rata ${fmtIDR(s.avgM)} per pelanggan)`;
+  return `Segmen ini mencakup ${fmtNum(s.count)} pelanggan (${fmtNum(pctCustomers, 1)}% dari total pelanggan) dan berkontribusi sekitar ${fmtNum(pctRevenue, 1)}% dari estimasi total pendapatan seluruh pelanggan. Secara karakteristik, pelanggan pada segmen ini ${recencyDesc}, memiliki ${freqDesc}, serta menunjukkan ${monDesc}.`;
+}
+
+function buildRecommendations(levelR, levelF, levelM) {
+  if (levelR === 'Rendah') {
+    return [
+      'Lakukan kampanye win-back melalui email/SMS/WhatsApp dengan penawaran diskon khusus untuk memicu transaksi kembali.',
+      'Kirim survei singkat untuk memahami alasan menurunnya aktivitas dan perbaiki titik gesekan dalam pengalaman belanja.',
+      'Tawarkan promo "kami merindukanmu" dengan masa berlaku terbatas agar tercipta urgensi untuk kembali bertransaksi.',
+    ];
+  }
+  if (levelF === 'Tinggi' && levelM === 'Tinggi') {
+    return [
+      'Berikan program loyalitas eksklusif seperti tier VIP, akses early-access produk baru, atau hadiah khusus.',
+      'Libatkan sebagai brand advocate melalui program referral dengan insentif yang menarik.',
+      'Tingkatkan personalisasi komunikasi (rekomendasi produk relevan) untuk menjaga tingkat keterikatan yang sudah tinggi.',
+    ];
+  }
+  if (levelM === 'Tinggi' && levelF !== 'Tinggi') {
+    return [
+      'Dorong frekuensi belanja dengan penawaran bundling atau diskon untuk pembelian berikutnya dalam jangka waktu tertentu.',
+      'Sediakan layanan personal/dedicated account mengingat nilai transaksi mereka yang besar.',
+      'Kirim pengingat restock atau rekomendasi produk komplementer berdasarkan riwayat pembelian besar sebelumnya.',
+    ];
+  }
+  if (levelF === 'Tinggi' && levelM !== 'Tinggi') {
+    return [
+      'Terapkan strategi cross-sell dan up-sell untuk meningkatkan nilai rata-rata transaksi (average order value).',
+      'Tawarkan bundling produk atau diskon bertingkat agar nilai belanja per transaksi meningkat.',
+      'Perkenalkan kategori atau produk premium yang relevan dengan kebiasaan belanja mereka yang sering.',
+    ];
+  }
+  if (levelF === 'Rendah' && levelM === 'Rendah' && levelR === 'Tinggi') {
+    return [
+      'Berikan seri onboarding atau edukasi produk untuk meningkatkan keterlibatan pelanggan yang relatif baru ini.',
+      'Tawarkan insentif pembelian kedua (diskon khusus dalam 30 hari pertama) untuk mendorong repeat purchase.',
+      'Kumpulkan feedback awal untuk memahami ekspektasi dan menyesuaikan pengalaman pelanggan ke depannya.',
+    ];
+  }
+  return [
+    'Pertahankan keterlibatan dengan program loyalitas berbasis poin untuk mendorong kenaikan ke segmen yang lebih bernilai.',
+    'Lakukan kampanye edukasi produk secara bertahap untuk meningkatkan frekuensi dan nilai transaksi.',
+    'Pantau perubahan perilaku segmen ini secara berkala karena posisinya di tengah berpotensi bergerak ke segmen lain.',
+  ];
+}
+
 const FIELD_HINTS = {
   customerId: ['customerid','customer_id','idpelanggan','id_pelanggan','customer','pelanggan'],
   date: ['invoicedate','orderdate','order_date','date','tanggal','tanggaltransaksi','tgl'],
@@ -273,6 +350,41 @@ export default function App() {
   const scatterData = useMemo(() => { if (!clusterResult||!clusterResult.assignments.length) return []; return customers.map((c,i)=>({...c,cluster:clusterResult.assignments[i]})); }, [clusterResult,customers]);
   const pieData = useMemo(() => { if (!clusterSummary) return []; return clusterSummary.map(s=>({name:s.label,value:s.count,cluster:s.cluster})); }, [clusterSummary]);
 
+  const overallStats = useMemo(() => {
+    if (!customers.length) return null;
+    const n = customers.length;
+    return {
+      avgR: customers.reduce((s,c)=>s+c.recency,0)/n,
+      avgF: customers.reduce((s,c)=>s+c.frequency,0)/n,
+      avgM: customers.reduce((s,c)=>s+c.monetary,0)/n,
+      totalM: customers.reduce((s,c)=>s+c.monetary,0),
+    };
+  }, [customers]);
+
+  const clusterInterpretations = useMemo(() => {
+    if (!clusterSummary || !overallStats || !customers.length) return null;
+    return clusterSummary.map(s => {
+      const levelR = classifyLevel(s.avgR, overallStats.avgR, true);
+      const levelF = classifyLevel(s.avgF, overallStats.avgF, false);
+      const levelM = classifyLevel(s.avgM, overallStats.avgM, false);
+      const pctCustomers = (s.count / customers.length) * 100;
+      const segmentRevenue = s.avgM * s.count;
+      const pctRevenue = overallStats.totalM > 0 ? (segmentRevenue / overallStats.totalM) * 100 : 0;
+      return {
+        ...s, levelR, levelF, levelM, pctCustomers, pctRevenue, segmentRevenue,
+        narrative: buildNarrative(s, levelR, levelF, levelM, pctCustomers, pctRevenue),
+        recommendations: buildRecommendations(levelR, levelF, levelM),
+      };
+    });
+  }, [clusterSummary, overallStats, customers.length]);
+
+  const executiveSummary = useMemo(() => {
+    if (!clusterInterpretations) return null;
+    const top = [...clusterInterpretations].sort((a,b)=>b.pctRevenue-a.pctRevenue)[0];
+    const atRisk = [...clusterInterpretations].filter(s=>s.levelR==='Rendah').sort((a,b)=>b.count-a.count)[0];
+    return { top, atRisk };
+  }, [clusterInterpretations]);
+
   const downloadResults = () => {
     if (!clusterResult||!clusterSummary) return;
     const labelMap={}; clusterSummary.forEach(s=>(labelMap[s.cluster]=s.label));
@@ -281,6 +393,29 @@ export default function App() {
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download='hasil_segmentasi_kmeans.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const downloadSummaryReport = () => {
+    if (!clusterInterpretations) return;
+    const rows = clusterInterpretations.map(s => ({
+      Cluster: s.cluster,
+      Segmen: s.label,
+      Jumlah_Pelanggan: s.count,
+      Persentase_Pelanggan: `${fmtNum(s.pctCustomers, 1)}%`,
+      Avg_Recency_Hari: fmtNum(s.avgR, 1),
+      Level_Recency: s.levelR,
+      Avg_Frequency: fmtNum(s.avgF, 1),
+      Level_Frequency: s.levelF,
+      Avg_Monetary: s.avgM,
+      Level_Monetary: s.levelM,
+      Persentase_Kontribusi_Revenue: `${fmtNum(s.pctRevenue, 1)}%`,
+      Deskripsi: s.narrative,
+      Rekomendasi_Strategi: s.recommendations.join(' | '),
+    }));
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'ringkasan_interpretasi_segmen.csv'; a.click(); URL.revokeObjectURL(url);
   };
 
   if (stage==='upload') return (
@@ -498,7 +633,7 @@ export default function App() {
                   <Ticket style={{ padding:22, marginBottom:24, overflowX:'auto' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:10 }}>
                       <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>KARAKTERISTIK CLUSTER</div>
-                      <button onClick={downloadResults} style={{ background:'transparent', color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'10px 20px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, cursor:'pointer' }}>⬇ Unduh Hasil (CSV)</button>
+                      <button onClick={downloadResults} style={{ background:'transparent', color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'10px 20px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, cursor:'pointer' }}>⬇ Unduh Data Per Pelanggan (CSV)</button>
                     </div>
                     <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
                       <thead><tr>{['Cluster','Segmen','Jumlah Pelanggan','Avg Recency (hari)','Avg Frequency','Avg Monetary'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
@@ -516,6 +651,47 @@ export default function App() {
                       </tbody>
                     </table>
                   </Ticket>
+
+                  {clusterInterpretations && executiveSummary && (
+                    <>
+                      <Ticket style={{ padding: 22, marginBottom: 24 }}>
+                        <div style={{ fontSize:12, color:C.muted, marginBottom:12, fontFamily:'"IBM Plex Mono",monospace', letterSpacing:'0.08em' }}>RINGKASAN EKSEKUTIF</div>
+                        <p style={{ fontSize:13.5, color:C.text, lineHeight:1.75, margin:0 }}>
+                          Dari hasil segmentasi ini, segmen <strong style={{color:C.amber}}>{executiveSummary.top.label}</strong> memberikan kontribusi pendapatan terbesar yaitu sekitar {fmtNum(executiveSummary.top.pctRevenue,1)}% dari total pendapatan meski hanya berisi {fmtNum(executiveSummary.top.pctCustomers,1)}% dari total pelanggan ({fmtNum(executiveSummary.top.count)} pelanggan), menjadikannya aset utama yang perlu dijaga dan dipertahankan.
+                          {executiveSummary.atRisk && (
+                            <> Di sisi lain, segmen <strong style={{color:C.rose}}>{executiveSummary.atRisk.label}</strong> berisiko mengalami churn dengan {fmtNum(executiveSummary.atRisk.count)} pelanggan ({fmtNum(executiveSummary.atRisk.pctCustomers,1)}%) yang sudah lama tidak bertransaksi (rata-rata {fmtNum(executiveSummary.atRisk.avgR,1)} hari sejak transaksi terakhir), sehingga memerlukan perhatian khusus melalui strategi reaktivasi agar tidak hilang sepenuhnya.</>
+                          )}
+                        </p>
+                      </Ticket>
+
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:10 }}>
+                        <div>
+                          <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600 }}>Interpretasi & Rekomendasi per Segmen</div>
+                          <div style={{ fontSize:13, color:C.muted, marginTop:4 }}>Penjabaran karakteristik tiap cluster beserta strategi bisnis/marketing yang relevan.</div>
+                        </div>
+                        <button onClick={downloadSummaryReport} style={{ background:'transparent', color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'10px 20px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, cursor:'pointer', flexShrink:0 }}>⬇ Unduh Ringkasan & Rekomendasi (CSV)</button>
+                      </div>
+
+                      <div style={{ display:'flex', flexDirection:'column', gap:16, marginBottom:24 }}>
+                        {clusterInterpretations.map(s => (
+                          <Ticket key={s.cluster} style={{ padding:22 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12, flexWrap:'wrap' }}>
+                              <span style={{ width:12, height:12, borderRadius:'50%', background:CLUSTER_COLORS[s.cluster%CLUSTER_COLORS.length], display:'inline-block', flexShrink:0 }} />
+                              <div style={{ fontFamily:'"Fraunces",serif', fontSize:18, fontWeight:600 }}>{s.label}</div>
+                              <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>
+                                {fmtNum(s.count)} pelanggan · {fmtNum(s.pctCustomers,1)}% populasi · {fmtNum(s.pctRevenue,1)}% kontribusi revenue
+                              </div>
+                            </div>
+                            <p style={{ fontSize:13.5, color:C.text, lineHeight:1.75, marginBottom:14 }}>{s.narrative}</p>
+                            <div style={{ fontSize:11, color:C.muted, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8, fontFamily:'"IBM Plex Mono",monospace' }}>Rekomendasi Strategi Bisnis/Marketing</div>
+                            <ul style={{ margin:0, paddingLeft:18, display:'flex', flexDirection:'column', gap:6 }}>
+                              {s.recommendations.map((r,i) => <li key={i} style={{ fontSize:13.5, color:C.text, lineHeight:1.7 }}>{r}</li>)}
+                            </ul>
+                          </Ticket>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
