@@ -138,10 +138,10 @@ function calculateSilhouetteScore(data, assignments, k) {
 function getSegmentLabels(k) {
   const base = ['Pelanggan Utama (Champions)','Pelanggan Setia','Pelanggan Reguler','Pelanggan Potensial','Pelanggan Baru'];
   if (k===1) return ['Seluruh Pelanggan'];
-  if (k-1<=base.length) return [...base.slice(0,k-1),'Pelanggan Berisiko (At Risk)'];
+  if (k-1<=base.length) return [...base.slice(0,k-1),'Pelanggan Berisiko (Berisiko)'];
   const extra=[];
   for (let i=0; i<k-1-base.length; i++) extra.push(`Segmen Tambahan ${i+1}`);
-  return [...base,...extra,'Pelanggan Berisiko (At Risk)'];
+  return [...base,...extra,'Pelanggan Berisiko (Berisiko)'];
 }
 
 // Klasifikasi level (Tinggi/Sedang/Rendah) relatif terhadap rata-rata keseluruhan pelanggan.
@@ -181,37 +181,37 @@ function buildNarrative(s, levelR, levelF, levelM, pctCustomers, pctRevenue) {
 function buildRecommendations(levelR, levelF, levelM) {
   if (levelR === 'Rendah') {
     return [
-      'Lakukan kampanye win-back melalui email/SMS/WhatsApp dengan penawaran diskon khusus untuk memicu transaksi kembali.',
+      'Lakukan kampanye reaktivasi melalui email/SMS/WhatsApp dengan penawaran diskon khusus untuk memicu transaksi kembali.',
       'Kirim survei singkat untuk memahami alasan menurunnya aktivitas dan perbaiki titik gesekan dalam pengalaman belanja.',
       'Tawarkan promo "kami merindukanmu" dengan masa berlaku terbatas agar tercipta urgensi untuk kembali bertransaksi.',
     ];
   }
   if (levelF === 'Tinggi' && levelM === 'Tinggi') {
     return [
-      'Berikan program loyalitas eksklusif seperti tier VIP, akses early-access produk baru, atau hadiah khusus.',
-      'Libatkan sebagai brand advocate melalui program referral dengan insentif yang menarik.',
+      ''Berikan program loyalitas eksklusif seperti tingkatan VIP, akses awal produk baru, atau hadiah khusus.',',
+      'Libatkan sebagai promotor merek melalui program rujukan dengan insentif yang menarik.',
       'Tingkatkan personalisasi komunikasi (rekomendasi produk relevan) untuk menjaga tingkat keterikatan yang sudah tinggi.',
     ];
   }
   if (levelM === 'Tinggi' && levelF !== 'Tinggi') {
     return [
-      'Dorong frekuensi belanja dengan penawaran bundling atau diskon untuk pembelian berikutnya dalam jangka waktu tertentu.',
-      'Sediakan layanan personal/dedicated account mengingat nilai transaksi mereka yang besar.',
-      'Kirim pengingat restock atau rekomendasi produk komplementer berdasarkan riwayat pembelian besar sebelumnya.',
+      'Dorong frekuensi belanja dengan penawaran paket atau diskon untuk pembelian berikutnya dalam jangka waktu tertentu.',
+      'Sediakan layanan personal/akun khusus mengingat nilai transaksi mereka yang besar.',
+      'Kirim pengingat pengisian kembali stok atau rekomendasi produk komplementer berdasarkan riwayat pembelian besar sebelumnya.',
     ];
   }
   if (levelF === 'Tinggi' && levelM !== 'Tinggi') {
     return [
-      'Terapkan strategi cross-sell dan up-sell untuk meningkatkan nilai rata-rata transaksi (average order value).',
-      'Tawarkan bundling produk atau diskon bertingkat agar nilai belanja per transaksi meningkat.',
+      'Terapkan strategi penjualan silang dan penjualan tambahan untuk meningkatkan nilai pesanan rata-rata.',
+      'Tawarkan paket produk atau diskon bertingkat agar nilai belanja per transaksi meningkat.',
       'Perkenalkan kategori atau produk premium yang relevan dengan kebiasaan belanja mereka yang sering.',
     ];
   }
   if (levelF === 'Rendah' && levelM === 'Rendah' && levelR === 'Tinggi') {
     return [
-      'Berikan seri onboarding atau edukasi produk untuk meningkatkan keterlibatan pelanggan yang relatif baru ini.',
-      'Tawarkan insentif pembelian kedua (diskon khusus dalam 30 hari pertama) untuk mendorong repeat purchase.',
-      'Kumpulkan feedback awal untuk memahami ekspektasi dan menyesuaikan pengalaman pelanggan ke depannya.',
+      'Berikan seri orientasi atau edukasi produk untuk meningkatkan keterlibatan pelanggan yang relatif baru ini.',
+      'Tawarkan insentif pembelian kedua (diskon khusus dalam 30 hari pertama) untuk mendorong pembelian berulang.',
+      'Kumpulkan umpan balik awal untuk memahami ekspektasi dan menyesuaikan pengalaman pelanggan ke depannya.',
     ];
   }
   return [
@@ -222,12 +222,12 @@ function buildRecommendations(levelR, levelF, levelM) {
 }
 
 const FIELD_HINTS = {
-  customerId: ['customerid','customer_id','idpelanggan','id_pelanggan','customer','pelanggan'],
-  date: ['invoicedate','orderdate','order_date','date','tanggal','tanggaltransaksi','tgl'],
-  invoiceId: ['invoiceno','invoice_no','orderid','order_id','notransaksi','no_transaksi','transactionid','nofaktur','no_faktur'],
-  product: ['description','product','productname','namaproduk','nama_produk','produk','item'],
-  quantity: ['quantity','qty','jumlah','jumlahbarang','jml'],
-  price: ['unitprice','unit_price','price','harga','hargasatuan','harga_satuan'],
+  customerId: ['idpelanggan','id_pelanggan','pelanggan'],
+  date: ['tanggal','tanggaltransaksi','tgl'],
+  invoiceId: ['notransaksi','no_transaksi','nofaktur','no_faktur'],
+  product: ['namaproduk','nama_produk','produk'],
+  quantity: ['jumlah','jumlahbarang','jml'],
+  price: ['harga','hargasatuan','harga_satuan'],
 };
 function autoDetectMapping(headers) {
   const norm = s => String(s).toLowerCase().replace(/[\s\-_.]/g,'');
@@ -274,8 +274,8 @@ const MAPPING_FIELDS = [
 
 const AXIS_OPTIONS = [
   { key:'recency', label:'Recency (hari)' },
-  { key:'frequency', label:'Frequency (kali transaksi)' },
-  { key:'monetary', label:'Monetary (Rp)' },
+  { key:'frequency', label:'Frekuensi (kali transaksi)' },
+  { key:'monetary', label:'Moneter (Rp)' },
 ];
 
 export default function App() {
@@ -285,7 +285,7 @@ export default function App() {
   const [rawData, setRawData] = useState([]);
   const [mapping, setMapping] = useState({});
   const [parseError, setParseError] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('ringkasan');
   const [kValue, setKValue] = useState(3);
   const [evaluationData, setEvaluationData] = useState(null);
   const [evaluationLoading, setEvaluationLoading] = useState(false);
@@ -313,7 +313,7 @@ export default function App() {
     });
   };
 
-  const resetAll = () => { setStage('upload'); setFileName(''); setHeaders([]); setRawData([]); setMapping({}); setEvaluationData(null); setClusterResult(null); setActiveTab('overview'); };
+  const resetAll = () => { setStage('upload'); setFileName(''); setHeaders([]); setRawData([]); setMapping({}); setEvaluationData(null); setClusterResult(null); setActiveTab('ringkasan'); };
 
   const transactions = useMemo(() => {
     if (stage!=='app') return [];
@@ -404,17 +404,17 @@ export default function App() {
     const k=Math.min(kValue,normalizedFeatures.length);
     const groups=Array.from({length:k},()=>({count:0,sumR:0,sumF:0,sumM:0}));
     customers.forEach((cust,i)=>{ const c=clusterResult.assignments[i]; groups[c].count++; groups[c].sumR+=cust.recency; groups[c].sumF+=cust.frequency; groups[c].sumM+=cust.monetary; });
-    const stats=groups.map((g,idx)=>({ cluster:idx, count:g.count, avgR:g.count?g.sumR/g.count:0, avgF:g.count?g.sumF/g.count:0, avgM:g.count?g.sumM/g.count:0 }));
+    const stats=groups.map((g,idx)=>({ kelompok:idx, count:g.count, avgR:g.count?g.sumR/g.count:0, avgF:g.count?g.sumF/g.count:0, avgM:g.count?g.sumM/g.count:0 }));
     const maxR=Math.max(...stats.map(s=>s.avgR),1), maxF=Math.max(...stats.map(s=>s.avgF),1), maxM=Math.max(...stats.map(s=>s.avgM),1);
     const scored=stats.map(s=>({...s,score:s.avgF/maxF+s.avgM/maxM-s.avgR/maxR}));
     const sorted=[...scored].sort((a,b)=>b.score-a.score);
     const labels=getSegmentLabels(k);
-    const labelMap={}; sorted.forEach((s,rank)=>(labelMap[s.cluster]=labels[rank]));
-    return scored.map(s=>({...s,label:labelMap[s.cluster]})).sort((a,b)=>a.cluster-b.cluster);
+    const labelMap={}; sorted.forEach((s,rank)=>(labelMap[s.kelompok]=labels[rank]));
+    return scored.map(s=>({...s,label:labelMap[s.kelompok]})).sort((a,b)=>a.kelompok-b.kelompok);
   }, [clusterResult,customers,kValue,normalizedFeatures.length]);
 
-  const scatterData = useMemo(() => { if (!clusterResult||!clusterResult.assignments.length) return []; return customers.map((c,i)=>({...c,cluster:clusterResult.assignments[i]})); }, [clusterResult,customers]);
-  const pieData = useMemo(() => { if (!clusterSummary) return []; return clusterSummary.map(s=>({name:s.label,value:s.count,cluster:s.cluster})); }, [clusterSummary]);
+  const scatterData = useMemo(() => { if (!clusterResult||!clusterResult.assignments.length) return []; return customers.map((c,i)=>({...c,kelompok:clusterResult.assignments[i]})); }, [clusterResult,customers]);
+  const pieData = useMemo(() => { if (!clusterSummary) return []; return clusterSummary.map(s=>({name:s.label,value:s.count,kelompok:s.kelompok})); }, [clusterSummary]);
 
   const overallStats = useMemo(() => {
     if (!customers.length) return null;
@@ -454,7 +454,7 @@ export default function App() {
   const downloadResults = () => {
     if (!clusterResult||!clusterSummary) return;
     const labelMap={}; clusterSummary.forEach(s=>(labelMap[s.cluster]=s.label));
-    const rows=customers.map((c,i)=>({CustomerID:c.customerId,Recency:c.recency,Frequency:c.frequency,Monetary:c.monetary,Cluster:clusterResult.assignments[i],Segmen:labelMap[clusterResult.assignments[i]]}));
+    const rows=customers.map((c,i)=>({CustomerID:c.customerId,Recency:c.recency,Frequency:c.frequency,Monetary:c.monetary,Kelompok:clusterResult.assignments[i],Segmen:labelMap[clusterResult.assignments[i]]}));
     const csv=Papa.unparse(rows);
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const url=URL.createObjectURL(blob);
@@ -464,7 +464,7 @@ export default function App() {
   const downloadSummaryReport = () => {
     if (!clusterInterpretations) return;
     const rows = clusterInterpretations.map(s => ({
-      Cluster: s.cluster,
+      Kelompok: s.cluster,
       Segmen: s.label,
       Jumlah_Pelanggan: s.count,
       Persentase_Pelanggan: `${fmtNum(s.pctCustomers, 1)}%`,
@@ -542,10 +542,10 @@ export default function App() {
       <aside style={{ width:240, background:C.surface, borderRight:`1px solid ${C.border}`, padding:'28px 18px', display:'flex', flexDirection:'column', flexShrink:0 }}>
         <div style={{ padding:'0 6px', marginBottom:28 }}>
           <div style={{ fontFamily:'"IBM Plex Mono",monospace', fontSize:11, color:C.amber, letterSpacing:'0.2em', textTransform:'uppercase' }}>Retail Analytics</div>
-          <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600, marginTop:4 }}>K-Means Dashboard</div>
+          <div style={{ fontFamily:'"Fraunces",serif', fontSize:19, fontWeight:600, marginTop:4 }}>Dasbor K-Means</div>
         </div>
         <nav style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:28 }}>
-          {[['overview','📊 Ringkasan Penjualan'],['segmentation','🎯 Segmentasi Pelanggan']].map(([tab,label])=>(
+          {[['ringkasan','📊 Ringkasan Penjualan'],['segmentasi','🎯 Segmentasi Pelanggan']].map(([tab,label])=>(
             <button key={tab} onClick={()=>setActiveTab(tab)} style={{ display:'flex', alignItems:'center', gap:10, width:'100%', textAlign:'left', padding:'11px 14px', borderRadius:6, background:activeTab===tab?C.surfaceAlt:'transparent', border:'none', cursor:'pointer', color:activeTab===tab?C.amber:C.muted, fontFamily:'Inter,sans-serif', fontSize:14, fontWeight:500 }}>{label}</button>
           ))}
         </nav>
@@ -561,7 +561,7 @@ export default function App() {
 
       {/* MAIN */}
       <main style={{ flex:1, padding:'32px 40px', minWidth:0, overflowY:'auto' }}>
-        {activeTab==='overview' && (
+        {activeTab==='ringkasan' && (
           overview ? (
             <div>
               <SectionTitle eyebrow="Dashboard" title="Ringkasan Penjualan" desc="Gambaran umum performa penjualan berdasarkan data transaksi yang diunggah." />
@@ -585,7 +585,7 @@ export default function App() {
                   </ResponsiveContainer>
                 </Ticket>
                 <Ticket style={{ padding:22 }}>
-                  <div style={{ fontSize:12, color:C.muted, marginBottom:16, fontFamily:'"IBM Plex Mono",monospace', letterSpacing:'0.08em' }}>PRODUK TERLARIS (BY REVENUE)</div>
+                  <div style={{ fontSize:12, color:C.muted, marginBottom:16, fontFamily:'"IBM Plex Mono",monospace', letterSpacing:'0.08em' }}>PRODUK TERLARIS (BERDASARKAN PENDAPATAN)</div>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={overview.topProducts} layout="vertical" margin={{left:10}}>
                       <CartesianGrid stroke={C.border} strokeDasharray="3 3" horizontal={false} />
@@ -601,10 +601,10 @@ export default function App() {
           ) : <Ticket style={{padding:24}}>Tidak ada data transaksi valid. Periksa kembali pemetaan kolom.</Ticket>
         )}
 
-        {activeTab==='segmentation' && (
+        {activeTab==='segmentasi' && (
           customers.length===0 ? <Ticket style={{padding:24}}>Tidak ada data pelanggan yang dapat dianalisis.</Ticket> : (
             <div>
-              <SectionTitle eyebrow="K-Means Clustering" title="Segmentasi Pelanggan (RFM)" desc={`${customers.length.toLocaleString('id-ID')} pelanggan diukur berdasarkan Recency, Frequency, dan Monetary, dinormalisasi (min-max), lalu dikelompokkan dengan K-Means.`} />
+              <SectionTitle eyebrow="Pengelompokan K-Means" title="Segmentasi Pelanggan (RFM)" desc={`${customers.length.toLocaleString('id-ID')} pelanggan diukur berdasarkan Recency, Frequency, dan Monetary, dinormalisasi (min-max), lalu dikelompokkan dengan K-Means.`} />
 
               <Ticket style={{ padding:22, marginBottom:24 }}>
                 <button onClick={() => setShowRfmTable(s => !s)} style={{ width: '100%', background: 'none', border: 'none', color: C.text, padding: 0, textAlign: 'left', cursor: 'pointer' }}>
@@ -700,7 +700,7 @@ export default function App() {
                   <div style={{ display:'grid', gridTemplateColumns:'1.3fr 1fr', gap:18, marginBottom:24 }}>
                     <Ticket style={{ padding:22 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-                        <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>VISUALISASI CLUSTER</div>
+                        <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>VISUALISASI KELOMPOK</div>
                         <div style={{ display:'flex', gap:8 }}>
                           {[['Sumbu X',axisX,setAxisX],['Sumbu Y',axisY,setAxisY]].map(([lbl,val,setter])=>(
                             <label key={lbl} style={{ fontSize:11, color:C.muted, display:'flex', alignItems:'center', gap:6 }}>
@@ -720,7 +720,7 @@ export default function App() {
                           <ZAxis range={[40,41]} />
                           <Tooltip contentStyle={tooltipStyle} formatter={(v,n)=>n==='monetary'?fmtIDR(v):v} />
                           {clusterSummary.map(s=>(
-                            <Scatter key={s.cluster} name={s.label} data={scatterData.filter(d=>d.cluster===s.cluster)} fill={CLUSTER_COLORS[s.cluster%CLUSTER_COLORS.length]} />
+                            <Scatter key={s.kelompok} name={s.label} data={scatterData.filter(d=>d.kelompok===s.kelompok)} fill={CLUSTER_COLORS[s.kelompok%CLUSTER_COLORS.length]} />
                           ))}
                           <Legend wrapperStyle={{fontSize:11}} />
                         </ScatterChart>
@@ -731,7 +731,7 @@ export default function App() {
                       <ResponsiveContainer width="100%" height={260}>
                         <PieChart>
                           <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({percent})=>`${(percent*100).toFixed(0)}%`}>
-                            {pieData.map((entry,i)=><Cell key={i} fill={CLUSTER_COLORS[entry.cluster%CLUSTER_COLORS.length]} />)}
+                            {pieData.map((entry,i)=><Cell key={i} fill={CLUSTER_COLORS[entry.kelompok%CLUSTER_COLORS.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} />
                         </PieChart>
@@ -739,7 +739,7 @@ export default function App() {
                       <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
                         {pieData.map((entry,i)=>(
                           <div key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:C.muted }}>
-                            <span style={{ width:10, height:10, borderRadius:'50%', background:CLUSTER_COLORS[entry.cluster%CLUSTER_COLORS.length], display:'inline-block' }} />
+                            <span style={{ width:10, height:10, borderRadius:'50%', background:CLUSTER_COLORS[entry.kelompok%CLUSTER_COLORS.length], display:'inline-block' }} />
                             {entry.name}
                           </div>
                         ))}
@@ -749,15 +749,15 @@ export default function App() {
 
                   <Ticket style={{ padding:22, marginBottom:24, overflowX:'auto' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:10 }}>
-                      <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>KARAKTERISTIK CLUSTER</div>
+                      <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>KARAKTERISTIK KELOMPOK</div>
                       <button onClick={downloadResults} style={{ background:'transparent', color:C.text, border:`1px solid ${C.border}`, borderRadius:6, padding:'10px 20px', fontFamily:'"IBM Plex Mono",monospace', fontSize:13, cursor:'pointer' }}>⬇ Unduh Data Per Pelanggan (CSV)</button>
                     </div>
                     <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                      <thead><tr>{['Cluster','Segmen','Pelanggan','Avg Recency','R-Level','Avg Frequency','F-Level','Avg Monetary','M-Level'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{['Kelompok','Segmen','Pelanggan','Avg Recency','R-Level','Avg Frequency','F-Level','Avg Monetary','M-Level'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 14px', color:C.muted, borderBottom:`1px solid ${C.border}`, fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {clusterInterpretations.map(s=>(
                           <tr key={s.cluster}>
-                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:CLUSTER_COLORS[s.cluster%CLUSTER_COLORS.length], marginRight:8 }} />{s.cluster}</td>
+                            <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}><span style={{ display:'inline-block', width:10, height:10, borderRadius:'50%', background:CLUSTER_COLORS[s.kelompok%CLUSTER_COLORS.length], marginRight:8 }} />{s.kelompok}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'Inter,sans-serif', fontWeight:500 }}>{s.label}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(s.count)}</td>
                             <td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.border}`, fontFamily:'"IBM Plex Mono",monospace' }}>{fmtNum(s.avgR,1)}</td>
@@ -779,7 +779,7 @@ export default function App() {
                         <p style={{ fontSize:13.5, color:C.text, lineHeight:1.75, margin:0 }}>
                           Dari hasil segmentasi ini, segmen <strong style={{color:C.amber}}>{executiveSummary.top.label}</strong> memberikan kontribusi pendapatan terbesar yaitu sekitar {fmtNum(executiveSummary.top.pctRevenue,1)}% dari total pendapatan meski hanya berisi {fmtNum(executiveSummary.top.pctCustomers,1)}% dari total pelanggan ({fmtNum(executiveSummary.top.count)} pelanggan), menjadikannya aset utama yang perlu dijaga dan dipertahankan.
                           {executiveSummary.atRisk && (
-                            <> Di sisi lain, segmen <strong style={{color:C.rose}}>{executiveSummary.atRisk.label}</strong> berisiko mengalami churn dengan {fmtNum(executiveSummary.atRisk.count)} pelanggan ({fmtNum(executiveSummary.atRisk.pctCustomers,1)}%) yang sudah lama tidak bertransaksi (rata-rata {fmtNum(executiveSummary.atRisk.avgR,1)} hari sejak transaksi terakhir), sehingga memerlukan perhatian khusus melalui strategi reaktivasi agar tidak hilang sepenuhnya.</>
+                            <> Di sisi lain, segmen <strong style={{color:C.rose}}>{executiveSummary.atRisk.label}</strong> berisiko kehilangan pelanggan dengan {fmtNum(executiveSummary.atRisk.count)} pelanggan ({fmtNum(executiveSummary.atRisk.pctCustomers,1)}%) yang sudah lama tidak bertransaksi (rata-rata {fmtNum(executiveSummary.atRisk.avgR,1)} hari sejak transaksi terakhir), sehingga memerlukan perhatian khusus melalui strategi reaktivasi agar tidak hilang sepenuhnya.</>
                           )}
                         </p>
                       </Ticket>
@@ -796,7 +796,7 @@ export default function App() {
                         {clusterInterpretations.map(s => (
                           <Ticket key={s.cluster} style={{ padding:22 }}>
                             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12, flexWrap:'wrap' }}>
-                              <span style={{ width:12, height:12, borderRadius:'50%', background:CLUSTER_COLORS[s.cluster%CLUSTER_COLORS.length], display:'inline-block', flexShrink:0 }} />
+                              <span style={{ width:12, height:12, borderRadius:'50%', background:CLUSTER_COLORS[s.kelompok%CLUSTER_COLORS.length], display:'inline-block', flexShrink:0 }} />
                               <div style={{ fontFamily:'"Fraunces",serif', fontSize:18, fontWeight:600 }}>{s.label}</div>
                               <div style={{ fontSize:12, color:C.muted, fontFamily:'"IBM Plex Mono",monospace' }}>
                                 {fmtNum(s.count)} pelanggan · {fmtNum(s.pctCustomers,1)}% populasi · {fmtNum(s.pctRevenue,1)}% kontribusi revenue
